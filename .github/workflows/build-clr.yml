@@ -1,0 +1,57 @@
+name: build-clr-win-x64
+
+on:
+  push:
+    branches: [ selfbuild-ci ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Toolchain
+        shell: pwsh
+        run: |
+          git log --oneline -1
+          cmake --version
+          python --version
+          Get-PSDrive C | Select-Object Used,Free
+
+      - name: Build CLR
+        shell: cmd
+        run: .\build.cmd clr -c Release -arch x64
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          $root = "artifacts\bin\coreclr"
+          if (-not (Test-Path $root)) { throw "no artifacts dir: $root" }
+          Get-ChildItem $root -Directory | Select-Object -ExpandProperty Name
+          $hit = Get-ChildItem $root -Recurse -Filter coreclr.dll | Select-Object -First 1
+          if (-not $hit) { throw "coreclr.dll not found under $root" }
+          $bin = $hit.Directory.FullName
+          Write-Host "picking $bin"
+          New-Item -ItemType Directory -Force out | Out-Null
+          @("coreclr.dll","clrjit.dll","clrgc.dll","System.Private.CoreLib.dll","mscordaccore.dll","mscordbi.dll","createdump.exe") |
+            ForEach-Object {
+              $p = Join-Path $bin $_
+              if (Test-Path $p) { Copy-Item $p out\ }
+            }
+          Get-ChildItem out | Format-Table Name,Length
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: clr-win-x64
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
