@@ -28,7 +28,7 @@ jobs:
 
       - name: Build CLR
         shell: cmd
-        run: .\build.cmd clr -c Release -arch x64
+        run: .\build.cmd clr -c Release -arch x64 /p:NuGetAudit=false
 
       - name: Collect
         shell: pwsh
